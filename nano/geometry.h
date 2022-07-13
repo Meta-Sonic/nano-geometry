@@ -516,7 +516,7 @@ struct rect {
   NANO_CLANG_DIAGNOSTIC(ignored, "-Wgnu-anonymous-struct")
 
   NANO_MSVC_DIAGNOSTIC_PUSH()
-  NANO_MSVC_DIAGNOSTIC(C4201)
+  NANO_MSVC_DIAGNOSTIC(4201)
 
   union {
     point_type origin;
