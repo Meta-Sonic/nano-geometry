@@ -66,6 +66,8 @@
 
 #define NANO_MSVC_DIAGNOSTIC_PUSH() NANO_MSVC_PRAGMA(warning(push))
 #define NANO_MSVC_DIAGNOSTIC_POP() NANO_MSVC_PRAGMA(warning(pop))
+#define NANO_MSVC_DIAGNOSTIC(X) NANO_MSVC_PRAGMA(warning(disable : X))
+
 #define NANO_MSVC_PUSH_WARNING(X) NANO_MSVC_DIAGNOSTIC_PUSH() NANO_MSVC_PRAGMA(warning(disable : X))
 #define NANO_MSVC_POP_WARNING() NANO_MSVC_DIAGNOSTIC_POP()
 
@@ -513,6 +515,9 @@ struct rect {
   NANO_CLANG_DIAGNOSTIC(ignored, "-Wnested-anon-types")
   NANO_CLANG_DIAGNOSTIC(ignored, "-Wgnu-anonymous-struct")
 
+  NANO_MSVC_DIAGNOSTIC_PUSH()
+  NANO_MSVC_DIAGNOSTIC(C4201)
+
   union {
     point_type origin;
     point_type position;
@@ -528,6 +533,7 @@ struct rect {
     };
   };
 
+  NANO_MSVC_DIAGNOSTIC_POP()
   NANO_CLANG_DIAGNOSTIC_POP()
 
   rect() NANO_NOEXCEPT = default;
