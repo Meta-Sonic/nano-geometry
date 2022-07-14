@@ -14,8 +14,8 @@
 #pragma once
 
 /*!
- * @file      nano.h
- * @brief     nano core
+ * @file      geometry.h
+ * @brief     nano geometry
  * @copyright Copyright (C) 2022, Meta-Sonic
  * @author    Alexandre Arsenault alx.arsenault@gmail.com
  * @date      Created 16/06/2022
@@ -80,10 +80,6 @@
 
 #define NANO_CLANG_POP_WARNING() NANO_CLANG_DIAGNOSTIC_POP()
 
-#define NANO_USING_TYPE(x)                                                                                             \
-  template <class T>                                                                                                   \
-  using x = decltype(T::x)
-
 NANO_CLANG_DIAGNOSTIC_PUSH()
 NANO_CLANG_DIAGNOSTIC(warning, "-Weverything")
 NANO_CLANG_DIAGNOSTIC(ignored, "-Wc++98-compat")
@@ -93,6 +89,10 @@ namespace nano {
 ///
 template <typename T>
 struct range;
+
+///
+template <typename T>
+struct point;
 
 ///
 template <typename T>
@@ -126,6 +126,10 @@ template <class T, template <class...> class... Ops>
 using if_members = enable_if_has_members_t<T, Ops...>;
 
 namespace meta {
+#define NANO_USING_TYPE(x)                                                                                             \
+  template <class T>                                                                                                   \
+  using x = decltype(T::x)
+
   NANO_USING_TYPE(x);
   NANO_USING_TYPE(y);
   NANO_USING_TYPE(width);
@@ -142,13 +146,25 @@ namespace meta {
   NANO_USING_TYPE(bottom);
   NANO_USING_TYPE(start);
   NANO_USING_TYPE(end);
+
+#undef NANO_USING_TYPE
 } // namespace meta.
 
 template <typename T1, typename T2, std::enable_if_t<std::is_floating_point_v<std::common_type_t<T1, T2>>, int> = 0>
-NANO_NODC_INLINE_CXPR bool fcompare(T1 a, T2 b) noexcept {
-  using T = std::common_type_t<T1, T2>;
-  return std::abs(static_cast<T>(a) - static_cast<T>(b)) < std::numeric_limits<T>::epsilon();
+NANO_NODC_INLINE_CXPR bool fcompare(T1 a, T2 b) NANO_NOEXCEPT {
+  using ftype = std::common_type_t<T1, T2>;
+  const ftype fa = static_cast<ftype>(a);
+  const ftype fb = static_cast<ftype>(b);
+  const ftype t = static_cast<ftype>(std::numeric_limits<ftype>::epsilon());
+  const ftype dt = std::abs(fa - fb);
+  return dt <= t || dt < std::max(std::abs(fa), std::abs(fb)) * t;
+
+  //  using T = std::common_type_t<T1, T2>;
+  //  return std::abs(static_cast<T>(a) - static_cast<T>(b)) <= std::numeric_limits<T>::epsilon();
 }
+
+// typedef typename detail::float_common_return<T1, T2>::type ftype;
+//
 
 //
 // MARK: - Geometry -
@@ -166,15 +182,23 @@ struct range {
   range() NANO_NOEXCEPT = default;
   range(range&&) NANO_NOEXCEPT = default;
   range(const range&) NANO_NOEXCEPT = default;
-  ~range() NANO_NOEXCEPT = default;
-  range& operator=(range&&) NANO_NOEXCEPT = default;
-  range& operator=(const range&) NANO_NOEXCEPT = default;
+
+  template <typename U>
+  NANO_INLINE_CXPR range(const range<U>& r) NANO_NOEXCEPT;
 
   /// Constructor.
   NANO_INLINE_CXPR range(value_type _start, value_type _end) NANO_NOEXCEPT;
 
   /// Creates a range with and start and length.
   NANO_NODC_INLINE_CXPR static range with_length(value_type start, value_type len) NANO_NOEXCEPT;
+
+  ~range() NANO_NOEXCEPT = default;
+
+  range& operator=(range&&) NANO_NOEXCEPT = default;
+  range& operator=(const range&) NANO_NOEXCEPT = default;
+
+  template <typename U>
+  NANO_INLINE_CXPR range& operator=(const range<U>& r) NANO_NOEXCEPT;
 
   /// Create a new range with given start position.
   ///
@@ -268,15 +292,24 @@ struct range {
   /// Swaps the value of start and end if the range is not sorted.
   ///
   /// @see is_sorted.
-  NANO_INLINE_CXPR void sort() NANO_NOEXCEPT;
+  NANO_INLINE_CXPR range& sort() NANO_NOEXCEPT;
 
   NANO_NODC_INLINE_CXPR bool operator==(const range& r) const NANO_NOEXCEPT;
-
   NANO_NODC_INLINE_CXPR bool operator!=(const range& r) const NANO_NOEXCEPT;
+  NANO_NODC_INLINE_CXPR bool operator<(const range& r) const NANO_NOEXCEPT;
+  NANO_NODC_INLINE_CXPR bool operator<=(const range& r) const NANO_NOEXCEPT;
+  NANO_NODC_INLINE_CXPR bool operator>(const range& r) const NANO_NOEXCEPT;
+  NANO_NODC_INLINE_CXPR bool operator>=(const range& r) const NANO_NOEXCEPT;
 };
 
 static_assert(std::is_trivial<range<int>>::value, "nano::range must remain a trivial type");
 static_assert(std::is_trivial<range<float>>::value, "nano::range must remain a trivial type");
+
+template <typename T>
+range(T, T) -> range<T>;
+
+template <typename T1, typename T2>
+range(T1, T2) -> range<std::common_type_t<T1, T2>>;
 
 ///
 template <typename T>
@@ -291,14 +324,20 @@ struct padding {
   padding(const padding&) NANO_NOEXCEPT = default;
   padding(padding&&) NANO_NOEXCEPT = default;
 
+  template <typename U>
+  NANO_INLINE_CXPR padding(const padding<U>& p) NANO_NOEXCEPT;
+
+  NANO_INLINE_CXPR padding(value_type t, value_type l, value_type b, value_type r) NANO_NOEXCEPT;
+
+  NANO_INLINE_CXPR padding(value_type p) NANO_NOEXCEPT;
+
   ~padding() NANO_NOEXCEPT = default;
 
   padding& operator=(const padding&) NANO_NOEXCEPT = default;
   padding& operator=(padding&&) NANO_NOEXCEPT = default;
 
-  NANO_INLINE_CXPR padding(value_type t, value_type l, value_type b, value_type r) NANO_NOEXCEPT;
-
-  NANO_INLINE_CXPR padding(value_type p) NANO_NOEXCEPT;
+  template <typename U>
+  NANO_INLINE_CXPR padding& operator=(const padding<U>& p) NANO_NOEXCEPT;
 
   NANO_NODC_INLINE nano::rect<value_type> inside_rect(const nano::rect<value_type>& rect) const NANO_NOEXCEPT;
 
@@ -310,6 +349,180 @@ struct padding {
 
   NANO_NODC_INLINE_CXPR bool operator!=(const padding& p) const NANO_NOEXCEPT;
 };
+
+template <typename T, std::enable_if_t<std::is_arithmetic<T>::value, std::nullptr_t> = nullptr>
+padding(T) -> padding<T>;
+
+template <typename T>
+padding(T, T, T, T) -> padding<T>;
+
+template <typename T1, typename T2, typename T3, typename T4>
+padding(T1, T2, T3, T4) -> padding<std::common_type_t<T1, T2, T3, T4>>;
+
+namespace detail {
+  template <class RectType, bool hasMember>
+  struct is_rect_os_impl {
+    static constexpr bool value = false;
+  };
+
+  template <class RectType>
+  struct is_rect_os_impl<RectType, true> {
+    using value_type = decltype(RectType{}.origin.x);
+    static constexpr bool value = offsetof(RectType, origin) == 0 //
+        && offsetof(RectType, size) == 2 * sizeof(value_type)
+        && offsetof(decltype(RectType{}.origin), y) == sizeof(value_type)
+        && offsetof(decltype(RectType{}.size), width) == 0 //
+        && offsetof(decltype(RectType{}.size), height) == sizeof(value_type);
+  };
+
+  template <class RectType, bool hasMember>
+  struct is_rect_xywh_impl {
+    static constexpr bool value = false;
+  };
+
+  template <class RectType>
+  struct is_rect_xywh_impl<RectType, true> {
+    using value_type = decltype(RectType{}.x);
+    static constexpr bool value = offsetof(RectType, x) == 0 //
+        && offsetof(RectType, y) == sizeof(value_type) //
+        && offsetof(RectType, width) == sizeof(value_type) * 2 //
+        && offsetof(RectType, height) == sizeof(value_type) * 3;
+  };
+
+  template <class RectType, bool hasMember>
+  struct is_rect_XYWH_impl {
+    static constexpr bool value = false;
+  };
+
+  template <class RectType>
+  struct is_rect_XYWH_impl<RectType, true> {
+    using value_type = decltype(RectType{}.X);
+    static constexpr bool value = offsetof(RectType, X) == 0 //
+        && offsetof(RectType, Y) == sizeof(value_type) //
+        && offsetof(RectType, Width) == sizeof(value_type) * 2 //
+        && offsetof(RectType, Height) == sizeof(value_type) * 3;
+  };
+
+  template <class RectType, bool hasMember>
+  struct is_rect_ltrb_impl {
+    static constexpr bool value = false;
+  };
+
+  template <class RectType>
+  struct is_rect_ltrb_impl<RectType, true> {
+    using value_type = decltype(RectType{}.left);
+    static constexpr bool value = offsetof(RectType, left) == 0 //
+        && offsetof(RectType, top) == sizeof(value_type) //
+        && offsetof(RectType, right) == sizeof(value_type) * 2 //
+        && offsetof(RectType, bottom) == sizeof(value_type) * 3;
+  };
+
+  template <class RectType>
+  using is_rect_os = is_rect_os_impl<RectType, //
+      has_members<RectType, meta::origin, meta::size>::value>;
+
+  template <class RectType>
+  using is_rect_xywh = is_rect_xywh_impl<RectType, //
+      has_members<RectType, meta::x, meta::y, meta::width, meta::height>::value
+          && !has_members<RectType, meta::origin, meta::size>::value>;
+
+  template <class RectType>
+  using is_rect_XYWH = is_rect_XYWH_impl<RectType, //
+      has_members<RectType, meta::X, meta::Y, meta::Width, meta::Height>::value>;
+
+  template <class RectType>
+  using is_rect_ltrb = is_rect_ltrb_impl<RectType, //
+      has_members<RectType, meta::left, meta::top, meta::right, meta::bottom>::value>;
+
+  template <class RectType>
+  using enable_if_rect_os = std::enable_if_t<is_rect_os<RectType>::value, std::nullptr_t>;
+
+  template <class RectType>
+  using enable_if_rect_xywh = std::enable_if_t<is_rect_xywh<RectType>::value, std::nullptr_t>;
+
+  template <class RectType>
+  using enable_if_rect_XYWH = std::enable_if_t<is_rect_XYWH<RectType>::value, std::nullptr_t>;
+
+  template <class RectType>
+  using enable_if_rect_ltrb = std::enable_if_t<is_rect_ltrb<RectType>::value, std::nullptr_t>;
+
+  template <class PointType, bool hasMember>
+  struct is_point_xy_impl {
+    static constexpr bool value = false;
+  };
+
+  template <class PointType>
+  struct is_point_xy_impl<PointType, true> {
+    using value_type = decltype(PointType{}.x);
+    static constexpr bool value = offsetof(PointType, x) == 0 //
+        && offsetof(PointType, y) == sizeof(value_type);
+  };
+
+  template <class PointType, bool hasMember>
+  struct is_point_XY_impl {
+    static constexpr bool value = false;
+  };
+
+  template <class PointType>
+  struct is_point_XY_impl<PointType, true> {
+    using value_type = decltype(PointType{}.X);
+    static constexpr bool value = offsetof(PointType, X) == 0 //
+        && offsetof(PointType, Y) == sizeof(value_type);
+  };
+
+  template <class PointType>
+  using enable_if_point_xy = std::enable_if_t< //
+      is_point_xy_impl<PointType,
+          has_members<PointType, meta::x, meta::y>::value //
+              && !is_rect_os<PointType>::value //
+              && !is_rect_xywh<PointType>::value>::value,
+      std::nullptr_t>;
+
+  template <class PointType>
+  using enable_if_point_XY = std::enable_if_t< //
+      is_point_XY_impl<PointType,
+          has_members<PointType, meta::X, meta::Y>::value && !is_rect_XYWH<PointType>::value>::value,
+      std::nullptr_t>;
+
+  template <class SizeType, bool hasMember>
+  struct is_size_wh_impl {
+    static constexpr bool value = false;
+  };
+
+  template <class SizeType>
+  struct is_size_wh_impl<SizeType, true> {
+    using value_type = decltype(SizeType{}.width);
+    static constexpr bool value = offsetof(SizeType, width) == 0 //
+        && offsetof(SizeType, height) == sizeof(value_type);
+  };
+
+  template <class SizeType, bool hasMember>
+  struct is_size_WH_impl {
+    static constexpr bool value = false;
+  };
+
+  template <class SizeType>
+  struct is_size_WH_impl<SizeType, true> {
+    using value_type = decltype(SizeType{}.Width);
+    static constexpr bool value = offsetof(SizeType, Width) == 0 //
+        && offsetof(SizeType, Height) == sizeof(value_type);
+  };
+
+  template <class SizeType>
+  using enable_if_size_wh = std::enable_if_t< //
+      is_size_wh_impl<SizeType,
+          has_members<SizeType, meta::width, meta::height>::value //
+              && !is_rect_os<SizeType>::value //
+              && !is_rect_xywh<SizeType>::value>::value,
+      std::nullptr_t>;
+
+  template <class SizeType>
+  using enable_if_size_WH = std::enable_if_t< //
+      is_size_WH_impl<SizeType,
+          has_members<SizeType, meta::Width, meta::Height>::value //
+              && !is_rect_XYWH<SizeType>::value>::value,
+      std::nullptr_t>;
+} // namespace detail.
 
 ///
 template <typename T>
@@ -326,11 +539,11 @@ struct point {
   NANO_INLINE_CXPR point(value_type X, value_type Y) NANO_NOEXCEPT : x(X), y(Y) {}
 
   /// Construct a Point from PointType with member x and y.
-  template <typename PointType, if_members<PointType, meta::x, meta::y> = nullptr>
+  template <typename PointType, detail::enable_if_point_xy<PointType> = nullptr>
   NANO_INLINE_CXPR point(const PointType& point) NANO_NOEXCEPT;
 
   /// Construct a Point from PointType with member X and Y.
-  template <typename PointType, if_members<PointType, meta::X, meta::Y> = nullptr>
+  template <typename PointType, detail::enable_if_point_XY<PointType> = nullptr>
   NANO_INLINE_CXPR point(const PointType& point) NANO_NOEXCEPT;
 
   ~point() NANO_NOEXCEPT = default;
@@ -381,19 +594,19 @@ struct point {
   NANO_NODC_INLINE_CXPR point operator-() const NANO_NOEXCEPT;
 
   /// Conversion operator to PointType with member x and y.
-  template <typename PointType, if_members<PointType, meta::x, meta::y> = nullptr>
+  template <typename PointType, detail::enable_if_point_xy<PointType> = nullptr>
   NANO_NODC_INLINE PointType convert() const;
 
   /// Conversion operator to PointType with member X and Y.
-  template <typename PointType, if_members<PointType, meta::X, meta::Y> = nullptr>
+  template <typename PointType, detail::enable_if_point_XY<PointType> = nullptr>
   NANO_NODC_INLINE PointType convert() const;
 
   /// Conversion operator to PointType with member x and y.
-  template <typename PointType, if_members<PointType, meta::x, meta::y> = nullptr>
+  template <typename PointType, detail::enable_if_point_xy<PointType> = nullptr>
   NANO_NODC_INLINE explicit operator PointType() const;
 
   /// Conversion operator to PointType with member X and Y.
-  template <typename PointType, if_members<PointType, meta::X, meta::Y> = nullptr>
+  template <typename PointType, detail::enable_if_point_XY<PointType> = nullptr>
   NANO_NODC_INLINE explicit operator PointType() const;
 
   template <typename U>
@@ -402,6 +615,18 @@ struct point {
 
 static_assert(std::is_trivial<point<int>>::value, "nano::point must remain a trivial type");
 static_assert(std::is_trivial<point<float>>::value, "nano::point must remain a trivial type");
+
+template <typename T>
+point(T, T) -> point<T>;
+
+template <typename T1, typename T2>
+point(T1, T2) -> point<std::common_type_t<T1, T2>>;
+
+template <typename PointType, detail::enable_if_point_xy<PointType> = nullptr>
+point(const PointType&) -> point<decltype(PointType{}.x)>;
+
+template <typename PointType, detail::enable_if_point_XY<PointType> = nullptr>
+point(const PointType&) -> point<decltype(PointType{}.X)>;
 
 ///
 template <typename T>
@@ -418,11 +643,11 @@ struct size {
   NANO_INLINE_CXPR size(value_type W, value_type H) NANO_NOEXCEPT;
 
   ///
-  template <typename SizeType, if_members<SizeType, meta::width, meta::height> = nullptr>
+  template <typename SizeType, detail::enable_if_size_wh<SizeType> = nullptr>
   NANO_INLINE_CXPR size(const SizeType& s) NANO_NOEXCEPT;
 
   ///
-  template <typename SizeType, if_members<SizeType, meta::Width, meta::Height> = nullptr>
+  template <typename SizeType, detail::enable_if_size_WH<SizeType> = nullptr>
   NANO_INLINE_CXPR size(const SizeType& s) NANO_NOEXCEPT;
 
   NANO_NODC_INLINE_CXPR static size zero();
@@ -476,16 +701,16 @@ struct size {
 
   NANO_NODC_INLINE_CXPR bool empty() const NANO_NOEXCEPT;
 
-  template <typename SizeType, if_members<SizeType, meta::width, meta::height> = nullptr>
+  template <typename SizeType, detail::enable_if_size_wh<SizeType> = nullptr>
   NANO_NODC_INLINE SizeType convert() const;
 
-  template <typename SizeType, if_members<SizeType, meta::Width, meta::Height> = nullptr>
+  template <typename SizeType, detail::enable_if_size_WH<SizeType> = nullptr>
   NANO_NODC_INLINE SizeType convert() const;
 
-  template <typename SizeType, if_members<SizeType, meta::width, meta::height> = nullptr>
+  template <typename SizeType, detail::enable_if_size_wh<SizeType> = nullptr>
   NANO_NODC_INLINE explicit operator SizeType() const;
 
-  template <typename SizeType, if_members<SizeType, meta::Width, meta::Height> = nullptr>
+  template <typename SizeType, detail::enable_if_size_WH<SizeType> = nullptr>
   NANO_NODC_INLINE explicit operator SizeType() const;
 
   template <typename U>
@@ -495,12 +720,17 @@ struct size {
 static_assert(std::is_trivial<size<int>>::value, "nano::size must remain a trivial type");
 static_assert(std::is_trivial<size<float>>::value, "nano::size must remain a trivial type");
 
-namespace detail {
-  template <class RectType>
-  using enable_if_rect_xywh = std::enable_if_t<has_members<RectType, meta::x, meta::y, meta::width, meta::height>::value
-          && !has_members<RectType, meta::origin, meta::size>::value,
-      std::nullptr_t>;
-} // namespace detail.
+template <typename T>
+size(T, T) -> size<T>;
+
+template <typename T1, typename T2>
+size(T1, T2) -> size<std::common_type_t<T1, T2>>;
+
+template <typename SizeType, detail::enable_if_size_wh<SizeType> = nullptr>
+size(const SizeType&) -> size<decltype(SizeType{}.width)>;
+
+template <typename SizeType, detail::enable_if_size_WH<SizeType> = nullptr>
+size(const SizeType&) -> size<decltype(SizeType{}.Width)>;
 
 ///
 template <typename T>
@@ -545,16 +775,16 @@ struct rect {
   NANO_INLINE_CXPR rect(value_type x, value_type y, value_type w, value_type h) NANO_NOEXCEPT;
   NANO_INLINE_CXPR rect(value_type x, value_type y, const size_type& s) NANO_NOEXCEPT;
 
-  template <typename RectType, if_members<RectType, meta::origin, meta::size> = nullptr>
-  NANO_INLINE_CXPR rect(const RectType& rect) NANO_NOEXCEPT;
-
-  template <typename RectType, if_members<RectType, meta::X, meta::Y, meta::Width, meta::Height> = nullptr>
-  NANO_INLINE_CXPR rect(const RectType& rect) NANO_NOEXCEPT;
-
-  template <typename RectType, if_members<RectType, meta::left, meta::top, meta::right, meta::bottom> = nullptr>
+  template <typename RectType, detail::enable_if_rect_os<RectType> = nullptr>
   NANO_INLINE_CXPR rect(const RectType& rect) NANO_NOEXCEPT;
 
   template <typename RectType, detail::enable_if_rect_xywh<RectType> = nullptr>
+  NANO_INLINE_CXPR rect(const RectType& rect) NANO_NOEXCEPT;
+
+  template <typename RectType, detail::enable_if_rect_XYWH<RectType> = nullptr>
+  NANO_INLINE_CXPR rect(const RectType& rect) NANO_NOEXCEPT;
+
+  template <typename RectType, detail::enable_if_rect_ltrb<RectType> = nullptr>
   NANO_INLINE_CXPR rect(const RectType& rect) NANO_NOEXCEPT;
 
   NANO_NODC_INLINE_CXPR static rect create_from_point(
@@ -681,28 +911,28 @@ struct rect {
   template <typename U>
   NANO_INLINE void swap(rect<U>& w) NANO_NOEXCEPT;
 
-  template <typename RectType, if_members<RectType, meta::origin, meta::size> = nullptr>
-  NANO_NODC_INLINE RectType convert() const;
-
-  template <typename RectType, if_members<RectType, meta::X, meta::Y, meta::Width, meta::Height> = nullptr>
-  NANO_NODC_INLINE RectType convert() const;
-
-  template <typename RectType, if_members<RectType, meta::left, meta::top, meta::right, meta::bottom> = nullptr>
+  template <typename RectType, detail::enable_if_rect_os<RectType> = nullptr>
   NANO_NODC_INLINE RectType convert() const;
 
   template <typename RectType, detail::enable_if_rect_xywh<RectType> = nullptr>
   NANO_NODC_INLINE RectType convert() const;
 
-  template <typename RectType, if_members<RectType, meta::origin, meta::size> = nullptr>
-  NANO_NODC_INLINE explicit operator RectType() const;
+  template <typename RectType, detail::enable_if_rect_XYWH<RectType> = nullptr>
+  NANO_NODC_INLINE RectType convert() const;
 
-  template <typename RectType, if_members<RectType, meta::X, meta::Y, meta::Width, meta::Height> = nullptr>
-  NANO_NODC_INLINE explicit operator RectType() const;
+  template <typename RectType, detail::enable_if_rect_ltrb<RectType> = nullptr>
+  NANO_NODC_INLINE RectType convert() const;
 
-  template <typename RectType, if_members<RectType, meta::left, meta::top, meta::right, meta::bottom> = nullptr>
+  template <typename RectType, detail::enable_if_rect_os<RectType> = nullptr>
   NANO_NODC_INLINE explicit operator RectType() const;
 
   template <typename RectType, detail::enable_if_rect_xywh<RectType> = nullptr>
+  NANO_NODC_INLINE explicit operator RectType() const;
+
+  template <typename RectType, detail::enable_if_rect_XYWH<RectType> = nullptr>
+  NANO_NODC_INLINE explicit operator RectType() const;
+
+  template <typename RectType, detail::enable_if_rect_ltrb<RectType> = nullptr>
   NANO_NODC_INLINE explicit operator RectType() const;
 
   template <typename U>
@@ -718,18 +948,133 @@ rect(T, T, T, T) -> rect<T>;
 template <typename T1, typename T2, typename T3, typename T4>
 rect(T1, T2, T3, T4) -> rect<std::common_type_t<T1, T2, T3, T4>>;
 
-template <typename RectType, if_members<RectType, meta::origin, meta::size> = nullptr>
+template <typename RectType, detail::enable_if_rect_os<RectType> = nullptr>
 rect(const RectType&) -> rect<decltype(RectType{}.origin.x)>;
-
-template <typename RectType, if_members<RectType, meta::X, meta::Y, meta::Width, meta::Height> = nullptr>
-rect(const RectType&) -> rect<decltype(RectType{}.X)>;
-
-template <typename RectType, if_members<RectType, meta::left, meta::top, meta::right, meta::bottom> = nullptr>
-rect(const RectType&) -> rect<decltype(RectType{}.left)>;
 
 template <typename RectType, detail::enable_if_rect_xywh<RectType> = nullptr>
 rect(const RectType&) -> rect<decltype(RectType{}.x)>;
 
+template <typename RectType, detail::enable_if_rect_XYWH<RectType> = nullptr>
+rect(const RectType&) -> rect<decltype(RectType{}.X)>;
+
+template <typename RectType, detail::enable_if_rect_ltrb<RectType> = nullptr>
+rect(const RectType&) -> rect<decltype(RectType{}.left)>;
+
+template <typename _Tp>
+class quad {
+public:
+  using value_type = _Tp;
+  static_assert(std::is_arithmetic_v<value_type>, "value_type is not arithmetic");
+
+  using point_type = nano::point<value_type>;
+
+  point_type top_left;
+  point_type top_right;
+  point_type bottom_right;
+  point_type bottom_left;
+
+  quad() NANO_NOEXCEPT = default;
+  quad(const quad&) NANO_NOEXCEPT = default;
+  quad(quad&&) NANO_NOEXCEPT = default;
+
+  NANO_INLINE_CXPR quad(
+      const point_type& tl, const point_type& tr, const point_type& br, const point_type& bl) NANO_NOEXCEPT;
+
+  NANO_INLINE_CXPR quad(const nano::rect<value_type>& r) NANO_NOEXCEPT;
+
+  ~quad() NANO_NOEXCEPT = default;
+
+  quad& operator=(const quad& p) NANO_NOEXCEPT = default;
+  quad& operator=(quad&& p) NANO_NOEXCEPT = default;
+
+  template <typename U>
+  NANO_INLINE_CXPR quad& operator=(const quad<U>& q) NANO_NOEXCEPT;
+
+  NANO_NODC_INLINE_CXPR bool operator==(const quad& q) const NANO_NOEXCEPT;
+
+  NANO_NODC_INLINE_CXPR bool operator!=(const quad& q) const NANO_NOEXCEPT;
+
+  friend std::ostream& operator<<(std::ostream& stream, const quad& p) {
+    stream << "[{" << p.top_left << "}, {" << p.top_right << "}, {" << p.bottom_right << "}, {" << p.bottom_left
+           << "}]";
+    return stream;
+  }
+};
+
+///
+///
+/// [ a  b  tx ]
+/// [ c  d  ty ]
+/// [ 0  0  1  ]
+///
+template <typename T>
+class transform {
+public:
+  using value_type = T;
+  static_assert(std::is_floating_point<T>::value, "nano::transform value_type must be floating point");
+
+  transform() NANO_NOEXCEPT = default;
+  transform(const transform&) NANO_NOEXCEPT = default;
+  transform(transform&&) NANO_NOEXCEPT = default;
+
+  NANO_INLINE_CXPR transform(
+      value_type _a, value_type _b, value_type _c, value_type _d, value_type _tx, value_type _ty) NANO_NOEXCEPT;
+
+  NANO_NODC_INLINE_CXPR static transform identity() NANO_NOEXCEPT;
+
+  NANO_NODC_INLINE_CXPR static transform translation(const nano::point<value_type>& p) NANO_NOEXCEPT;
+
+  NANO_NODC_INLINE_CXPR static transform scale(const nano::size<value_type>& s) NANO_NOEXCEPT;
+
+  /// return a transform which rotates by `angle' radians.
+  NANO_NODC_INLINE static transform rotation(value_type angle) NANO_NOEXCEPT;
+
+  NANO_NODC_INLINE static transform rotation(value_type angle, const nano::point<value_type>& p) NANO_NOEXCEPT;
+
+  ~transform() NANO_NOEXCEPT = default;
+
+  transform& operator=(const transform&) NANO_NOEXCEPT = default;
+  transform& operator=(transform&&) NANO_NOEXCEPT = default;
+
+  NANO_INLINE_CXPR transform& translated(const nano::point<value_type>& p) NANO_NOEXCEPT;
+  NANO_INLINE_CXPR transform& scaled(const nano::size<value_type>& s) NANO_NOEXCEPT;
+  NANO_INLINE transform& rotated(value_type angle) NANO_NOEXCEPT;
+
+  NANO_NODC_INLINE_CXPR transform with_translation(const nano::point<value_type>& p) const NANO_NOEXCEPT;
+  NANO_NODC_INLINE_CXPR transform with_scale(const nano::size<value_type>& s) const NANO_NOEXCEPT;
+  NANO_NODC_INLINE transform with_rotation(value_type angle) const NANO_NOEXCEPT;
+
+  NANO_NODC_INLINE_CXPR transform operator*(const transform& t) const NANO_NOEXCEPT;
+  NANO_NODC_INLINE_CXPR transform operator+(const nano::point<value_type>& p) const NANO_NOEXCEPT;
+  NANO_NODC_INLINE_CXPR transform operator-(const nano::point<value_type>& p) const NANO_NOEXCEPT;
+  NANO_NODC_INLINE_CXPR transform operator*(const nano::size<value_type>& s) const NANO_NOEXCEPT;
+
+  NANO_INLINE_CXPR transform& operator*=(const transform& t) NANO_NOEXCEPT;
+  NANO_INLINE_CXPR transform& operator*=(const nano::size<value_type>& s) NANO_NOEXCEPT;
+  NANO_INLINE_CXPR transform& operator+=(const nano::point<value_type>& p) NANO_NOEXCEPT;
+  NANO_INLINE_CXPR transform& operator-=(const nano::point<value_type>& p) NANO_NOEXCEPT;
+
+  NANO_NODC_INLINE_CXPR nano::point<value_type> apply(const nano::point<value_type>& p) const NANO_NOEXCEPT;
+  NANO_NODC_INLINE_CXPR nano::quad<value_type> apply(const nano::rect<value_type>& r) const NANO_NOEXCEPT;
+  NANO_NODC_INLINE_CXPR nano::quad<value_type> apply(const nano::quad<value_type>& q) const NANO_NOEXCEPT;
+
+  template <typename transform_type>
+  NANO_NODC_INLINE operator transform_type() const;
+
+  value_type a, b, c, d, tx, ty;
+};
+
+static_assert(std::is_trivial<transform<float>>::value, "nano::transform must remain a trivial type");
+static_assert(std::is_trivial<transform<double>>::value, "nano::transform must remain a trivial type");
+
+template <typename T>
+NANO_NODC_INLINE_CXPR nano::point<T> operator*(const nano::point<T>& p, const transform<T>& t) NANO_NOEXCEPT;
+
+template <typename T>
+NANO_NODC_INLINE_CXPR nano::quad<T> operator*(const nano::rect<T>& p, const transform<T>& t) NANO_NOEXCEPT;
+
+template <typename T>
+NANO_NODC_INLINE_CXPR nano::quad<T> operator*(const nano::quad<T>& q, const transform<T>& t) NANO_NOEXCEPT;
 } // namespace nano.
 
 //-------------------------------------------------------------------------------------------------
@@ -766,13 +1111,13 @@ namespace nano {
 
 /// Construct a Point from PointType with member x and y.
 template <typename T>
-template <typename PointType, if_members<PointType, meta::x, meta::y>>
+template <typename PointType, detail::enable_if_point_xy<PointType>>
 NANO_INLINE_CXPR point<T>::point(const PointType& point) NANO_NOEXCEPT : x(static_cast<value_type>(point.x)),
                                                                          y(static_cast<value_type>(point.y)) {}
 
 /// Construct a Point from PointType with member X and Y.
 template <typename T>
-template <typename PointType, if_members<PointType, meta::X, meta::Y>>
+template <typename PointType, detail::enable_if_point_XY<PointType>>
 NANO_INLINE_CXPR point<T>::point(const PointType& point) NANO_NOEXCEPT : x(static_cast<value_type>(point.X)),
                                                                          y(static_cast<value_type>(point.Y)) {}
 
@@ -936,28 +1281,28 @@ NANO_INLINE_CXPR point<T> point<T>::with_add_y(value_type dy) const NANO_NOEXCEP
 }
 
 template <typename T>
-template <typename PointType, if_members<PointType, meta::x, meta::y>>
+template <typename PointType, detail::enable_if_point_xy<PointType>>
 NANO_INLINE point<T>::operator PointType() const {
   using Type = decltype(PointType{}.x);
   return PointType{ static_cast<Type>(x), static_cast<Type>(y) };
 }
 
 template <typename T>
-template <typename PointType, if_members<PointType, meta::X, meta::Y>>
+template <typename PointType, detail::enable_if_point_XY<PointType>>
 NANO_INLINE point<T>::operator PointType() const {
   using Type = decltype(PointType{}.X);
   return PointType{ static_cast<Type>(x), static_cast<Type>(y) };
 }
 
 template <typename T>
-template <typename PointType, if_members<PointType, meta::x, meta::y>>
+template <typename PointType, detail::enable_if_point_xy<PointType>>
 NANO_INLINE PointType point<T>::convert() const {
   using Type = decltype(PointType{}.x);
   return PointType{ static_cast<Type>(x), static_cast<Type>(y) };
 }
 
 template <typename T>
-template <typename PointType, if_members<PointType, meta::X, meta::Y>>
+template <typename PointType, detail::enable_if_point_XY<PointType>>
 NANO_INLINE PointType point<T>::convert() const {
   using Type = decltype(PointType{}.X);
   return PointType{ static_cast<Type>(x), static_cast<Type>(y) };
@@ -976,12 +1321,12 @@ template <typename T>
 NANO_INLINE_CXPR size<T>::size(value_type W, value_type H) NANO_NOEXCEPT : width(W), height(H) {}
 
 template <typename T>
-template <typename SizeType, if_members<SizeType, meta::width, meta::height>>
+template <typename SizeType, detail::enable_if_size_wh<SizeType>>
 NANO_INLINE_CXPR size<T>::size(const SizeType& s) NANO_NOEXCEPT : width(static_cast<value_type>(s.width)),
                                                                   height(static_cast<value_type>(s.height)) {}
 
 template <typename T>
-template <typename SizeType, if_members<SizeType, meta::Width, meta::Height>>
+template <typename SizeType, detail::enable_if_size_WH<SizeType>>
 NANO_INLINE_CXPR size<T>::size(const SizeType& s) NANO_NOEXCEPT : width(static_cast<value_type>(s.Width)),
                                                                   height(static_cast<value_type>(s.Height)) {}
 
@@ -1146,28 +1491,28 @@ NANO_NODC_INLINE_CXPR bool size<T>::empty() const NANO_NOEXCEPT {
 }
 
 template <typename T>
-template <typename SizeType, if_members<SizeType, meta::width, meta::height>>
+template <typename SizeType, detail::enable_if_size_wh<SizeType>>
 NANO_INLINE size<T>::operator SizeType() const {
   using Type = decltype(SizeType{}.width);
   return SizeType{ static_cast<Type>(width), static_cast<Type>(height) };
 }
 
 template <typename T>
-template <typename SizeType, if_members<SizeType, meta::Width, meta::Height>>
+template <typename SizeType, detail::enable_if_size_WH<SizeType>>
 NANO_INLINE size<T>::operator SizeType() const {
   using Type = decltype(SizeType{}.Width);
   return SizeType{ static_cast<Type>(width), static_cast<Type>(height) };
 }
 
 template <typename T>
-template <typename SizeType, if_members<SizeType, meta::width, meta::height>>
+template <typename SizeType, detail::enable_if_size_wh<SizeType>>
 NANO_INLINE SizeType size<T>::convert() const {
   using Type = decltype(SizeType{}.width);
   return SizeType{ static_cast<Type>(width), static_cast<Type>(height) };
 }
 
 template <typename T>
-template <typename SizeType, if_members<SizeType, meta::Width, meta::Height>>
+template <typename SizeType, detail::enable_if_size_WH<SizeType>>
 NANO_INLINE SizeType size<T>::convert() const {
   using Type = decltype(SizeType{}.Width);
   return SizeType{ static_cast<Type>(width), static_cast<Type>(height) };
@@ -1191,28 +1536,28 @@ NANO_INLINE_CXPR rect<T>::rect(value_type x, value_type y, const size_type& s) N
                                                                                                size(s) {}
 
 template <typename T>
-template <typename RectType, if_members<RectType, meta::origin, meta::size>>
+template <typename RectType, detail::enable_if_rect_os<RectType>>
 NANO_INLINE_CXPR rect<T>::rect(const RectType& rect) NANO_NOEXCEPT
     : origin{ static_cast<value_type>(rect.origin.x), static_cast<value_type>(rect.origin.y) },
       size{ static_cast<value_type>(rect.size.width), static_cast<value_type>(rect.size.height) } {}
-
-template <typename T>
-template <typename RectType, if_members<RectType, meta::X, meta::Y, meta::Width, meta::Height>>
-NANO_INLINE_CXPR rect<T>::rect(const RectType& rect) NANO_NOEXCEPT
-    : origin{ static_cast<value_type>(rect.X), static_cast<value_type>(rect.Y) },
-      size{ static_cast<value_type>(rect.Width), static_cast<value_type>(rect.Height) } {}
-
-template <typename T>
-template <typename RectType, if_members<RectType, meta::left, meta::top, meta::right, meta::bottom>>
-NANO_INLINE_CXPR rect<T>::rect(const RectType& rect) NANO_NOEXCEPT
-    : origin{ static_cast<value_type>(rect.left), static_cast<value_type>(rect.top) },
-      size{ static_cast<value_type>(rect.right - rect.left), static_cast<value_type>(rect.bottom - rect.top) } {}
 
 template <typename T>
 template <typename RectType, detail::enable_if_rect_xywh<RectType>>
 NANO_INLINE_CXPR rect<T>::rect(const RectType& rect) NANO_NOEXCEPT
     : origin{ static_cast<value_type>(rect.x), static_cast<value_type>(rect.y) },
       size{ static_cast<value_type>(rect.width), static_cast<value_type>(rect.height) } {}
+
+template <typename T>
+template <typename RectType, detail::enable_if_rect_XYWH<RectType>>
+NANO_INLINE_CXPR rect<T>::rect(const RectType& rect) NANO_NOEXCEPT
+    : origin{ static_cast<value_type>(rect.X), static_cast<value_type>(rect.Y) },
+      size{ static_cast<value_type>(rect.Width), static_cast<value_type>(rect.Height) } {}
+
+template <typename T>
+template <typename RectType, detail::enable_if_rect_ltrb<RectType>>
+NANO_INLINE_CXPR rect<T>::rect(const RectType& rect) NANO_NOEXCEPT
+    : origin{ static_cast<value_type>(rect.left), static_cast<value_type>(rect.top) },
+      size{ static_cast<value_type>(rect.right - rect.left), static_cast<value_type>(rect.bottom - rect.top) } {}
 
 template <typename T>
 NANO_INLINE_CXPR rect<T> rect<T>::create_from_point(
@@ -1712,26 +2057,11 @@ NANO_INLINE void rect<T>::swap(rect<U>& r) NANO_NOEXCEPT {
 }
 
 template <typename T>
-template <typename RectType, if_members<RectType, meta::origin, meta::size>>
+template <typename RectType, detail::enable_if_rect_os<RectType>>
 NANO_INLINE rect<T>::operator RectType() const {
   using Type = decltype(RectType{}.origin.x);
   return RectType{ { static_cast<Type>(x), static_cast<Type>(y) },
     { static_cast<Type>(width), static_cast<Type>(height) } };
-}
-
-template <typename T>
-template <typename RectType, if_members<RectType, meta::X, meta::Y, meta::Width, meta::Height>>
-NANO_INLINE rect<T>::operator RectType() const {
-  using Type = decltype(RectType{}.X);
-  return RectType{ static_cast<Type>(x), static_cast<Type>(y), static_cast<Type>(width), static_cast<Type>(height) };
-}
-
-template <typename T>
-template <typename RectType, if_members<RectType, meta::left, meta::top, meta::right, meta::bottom>>
-NANO_INLINE rect<T>::operator RectType() const {
-  using Type = decltype(RectType{}.left);
-  return RectType{ static_cast<Type>(x), static_cast<Type>(y), static_cast<Type>(x + width),
-    static_cast<Type>(y + height) };
 }
 
 template <typename T>
@@ -1742,7 +2072,22 @@ NANO_INLINE rect<T>::operator RectType() const {
 }
 
 template <typename T>
-template <typename RectType, if_members<RectType, meta::origin, meta::size>>
+template <typename RectType, detail::enable_if_rect_XYWH<RectType>>
+NANO_INLINE rect<T>::operator RectType() const {
+  using Type = decltype(RectType{}.X);
+  return RectType{ static_cast<Type>(x), static_cast<Type>(y), static_cast<Type>(width), static_cast<Type>(height) };
+}
+
+template <typename T>
+template <typename RectType, detail::enable_if_rect_ltrb<RectType>>
+NANO_INLINE rect<T>::operator RectType() const {
+  using Type = decltype(RectType{}.left);
+  return RectType{ static_cast<Type>(x), static_cast<Type>(y), static_cast<Type>(x + width),
+    static_cast<Type>(y + height) };
+}
+
+template <typename T>
+template <typename RectType, detail::enable_if_rect_os<RectType>>
 NANO_INLINE RectType rect<T>::convert() const {
   using Type = decltype(RectType{}.origin.x);
   return RectType{ { static_cast<Type>(x), static_cast<Type>(y) },
@@ -1750,25 +2095,25 @@ NANO_INLINE RectType rect<T>::convert() const {
 }
 
 template <typename T>
-template <typename RectType, if_members<RectType, meta::X, meta::Y, meta::Width, meta::Height>>
+template <typename RectType, detail::enable_if_rect_xywh<RectType>>
+NANO_INLINE RectType rect<T>::convert() const {
+  using Type = decltype(RectType{}.x);
+  return RectType{ static_cast<Type>(x), static_cast<Type>(y), static_cast<Type>(width), static_cast<Type>(height) };
+}
+
+template <typename T>
+template <typename RectType, detail::enable_if_rect_XYWH<RectType>>
 NANO_INLINE RectType rect<T>::convert() const {
   using Type = decltype(RectType{}.X);
   return RectType{ static_cast<Type>(x), static_cast<Type>(y), static_cast<Type>(width), static_cast<Type>(height) };
 }
 
 template <typename T>
-template <typename RectType, if_members<RectType, meta::left, meta::top, meta::right, meta::bottom>>
+template <typename RectType, detail::enable_if_rect_ltrb<RectType>>
 NANO_INLINE RectType rect<T>::convert() const {
   using Type = decltype(RectType{}.left);
   return RectType{ static_cast<Type>(x), static_cast<Type>(y), static_cast<Type>(x + width),
     static_cast<Type>(y + height) };
-}
-
-template <typename T>
-template <typename RectType, detail::enable_if_rect_xywh<RectType>>
-NANO_INLINE RectType rect<T>::convert() const {
-  using Type = decltype(RectType{}.x);
-  return RectType{ static_cast<Type>(x), static_cast<Type>(y), static_cast<Type>(width), static_cast<Type>(height) };
 }
 
 template <typename T>
@@ -1781,12 +2126,25 @@ NANO_INLINE std::ostream& operator<<(std::ostream& s, const nano::rect<T>& rect)
 //
 
 template <typename T>
+template <typename U>
+NANO_INLINE_CXPR range<T>::range(const range<U>& r) NANO_NOEXCEPT : start(static_cast<value_type>(r.start)),
+                                                                    end(static_cast<value_type>(r.end)) {}
+
+template <typename T>
+NANO_CXPR range<T>::range(value_type _start, value_type _end) NANO_NOEXCEPT : start(_start), end(_end) {}
+
+template <typename T>
 NANO_CXPR range<T> range<T>::with_length(value_type start, value_type len) NANO_NOEXCEPT {
   return { start, start + len };
 }
 
 template <typename T>
-NANO_CXPR range<T>::range(value_type _start, value_type _end) NANO_NOEXCEPT : start(_start), end(_end) {}
+template <typename U>
+NANO_INLINE_CXPR range<T>& range<T>::operator=(const range<U>& r) NANO_NOEXCEPT {
+  start = static_cast<value_type>(r.start);
+  end = static_cast<value_type>(r.end);
+  return *this;
+}
 
 template <typename T>
 NANO_CXPR range<T> range<T>::with_start(value_type s) const NANO_NOEXCEPT {
@@ -1930,10 +2288,12 @@ NANO_NODC_INLINE_CXPR typename range<T>::value_type range<T>::clipped_value(valu
 }
 
 template <typename T>
-NANO_CXPR void range<T>::sort() NANO_NOEXCEPT {
+NANO_CXPR range<T>& range<T>::sort() NANO_NOEXCEPT {
   if (!is_sorted()) {
     std::swap(start, end);
   }
+
+  return *this;
 }
 
 template <typename T>
@@ -1951,6 +2311,46 @@ NANO_CXPR bool range<T>::operator!=(const range<T>& r) const NANO_NOEXCEPT {
   return !operator==(r);
 }
 
+template <typename T>
+NANO_CXPR bool range<T>::operator<(const range<T>& r) const NANO_NOEXCEPT {
+  if constexpr (std::is_floating_point_v<T>) {
+    return nano::fcompare(start, r.start) ? length() < r.length() : start < r.start;
+  }
+  else {
+    return start == r.start ? length() < r.length() : start < r.start;
+  }
+}
+
+template <typename T>
+NANO_CXPR bool range<T>::operator<=(const range<T>& r) const NANO_NOEXCEPT {
+  if constexpr (std::is_floating_point_v<T>) {
+    return nano::fcompare(start, r.start) ? length() <= r.length() : start <= r.start;
+  }
+  else {
+    return start == r.start ? length() <= r.length() : start <= r.start;
+  }
+}
+
+template <typename T>
+NANO_CXPR bool range<T>::operator>(const range<T>& r) const NANO_NOEXCEPT {
+  if constexpr (std::is_floating_point_v<T>) {
+    return nano::fcompare(start, r.start) ? length() > r.length() : start > r.start;
+  }
+  else {
+    return start == r.start ? length() > r.length() : start > r.start;
+  }
+}
+
+template <typename T>
+NANO_CXPR bool range<T>::operator>=(const range<T>& r) const NANO_NOEXCEPT {
+  if constexpr (std::is_floating_point_v<T>) {
+    return nano::fcompare(start, r.start) ? length() >= r.length() : start >= r.start;
+  }
+  else {
+    return start == r.start ? length() >= r.length() : start >= r.start;
+  }
+}
+
 template <class T>
 NANO_INLINE std::ostream& operator<<(std::ostream& s, const range<T>& r) {
   return s << '{' << r.start << ',' << r.end << '}';
@@ -1960,45 +2360,292 @@ NANO_INLINE std::ostream& operator<<(std::ostream& s, const range<T>& r) {
 // MARK: - padding -
 //
 
-template <class T>
+template <typename T>
 NANO_CXPR padding<T>::padding(value_type t, value_type l, value_type b, value_type r) NANO_NOEXCEPT : top(t),
                                                                                                       left(l),
                                                                                                       bottom(b),
                                                                                                       right(r) {}
 
-template <class T>
+template <typename T>
 NANO_CXPR padding<T>::padding(value_type p) NANO_NOEXCEPT : top(p), left(p), bottom(p), right(p) {}
 
-template <class T>
+template <typename T>
+template <typename U>
+NANO_INLINE_CXPR padding<T>::padding(const padding<U>& p) NANO_NOEXCEPT : top(static_cast<value_type>(p.top)),
+                                                                          left(static_cast<value_type>(p.left)),
+                                                                          bottom(static_cast<value_type>(p.bottom)),
+                                                                          right(static_cast<value_type>(p.right)) {}
+
+template <typename T>
+template <typename U>
+NANO_INLINE_CXPR padding<T>& padding<T>::operator=(const padding<U>& p) NANO_NOEXCEPT {
+  top = static_cast<value_type>(p.top);
+  left = static_cast<value_type>(p.left);
+  bottom = static_cast<value_type>(p.bottom);
+  right = static_cast<value_type>(p.right);
+  return *this;
+}
+
+template <typename T>
 nano::rect<T> padding<T>::inside_rect(const nano::rect<T>& rect) const NANO_NOEXCEPT {
   return nano::rect<T>(
       rect.origin.x + left, rect.origin.y + top, rect.size.width - (left + right), rect.size.height - (top + bottom));
 }
 
-template <class T>
+template <typename T>
 nano::rect<T> padding<T>::outside_rect(const nano::rect<T>& rect) const NANO_NOEXCEPT {
   return nano::rect<T>(
       rect.origin.x - left, rect.origin.y - top, rect.size.width + left + right, rect.size.height + top + bottom);
 }
 
-template <class T>
+template <typename T>
 NANO_CXPR bool padding<T>::empty() const NANO_NOEXCEPT {
   return top == 0 && left == 0 && bottom == 0 && right == 0;
 }
 
-template <class T>
+template <typename T>
 NANO_CXPR bool padding<T>::operator==(const padding& p) const NANO_NOEXCEPT {
   return top == p.top && left == p.left && bottom == p.bottom && right == p.right;
 }
 
-template <class T>
+template <typename T>
 NANO_CXPR bool padding<T>::operator!=(const padding& p) const NANO_NOEXCEPT {
   return !operator==(p);
 }
 
-template <class T>
+template <typename T>
 std::ostream& operator<<(std::ostream& s, const padding<T>& p) {
   return s << '{' << p.top << ',' << p.left << ',' << p.bottom << ',' << p.right << '}';
+}
+
+template <typename T>
+NANO_INLINE_CXPR quad<T>::quad(const point_type& tl, const point_type& tr, const point_type& br,
+    const point_type& bl) NANO_NOEXCEPT : top_left(tl),
+                                          top_right(tr),
+                                          bottom_right(br),
+                                          bottom_left(bl)
+
+{}
+
+template <typename T>
+NANO_INLINE_CXPR quad<T>::quad(const nano::rect<value_type>& r) NANO_NOEXCEPT : top_left(r.top_left()),
+                                                                                top_right(r.top_right()),
+                                                                                bottom_right(r.bottom_right()),
+                                                                                bottom_left(r.bottom_left()) {}
+
+template <typename T>
+template <typename U>
+NANO_INLINE_CXPR quad<T>& quad<T>::operator=(const quad<U>& q) NANO_NOEXCEPT {
+  top_left = q.top_left;
+  top_right = q.top_right;
+  bottom_right = q.bottom_right;
+  bottom_left = q.bottom_left;
+  return *this;
+}
+
+template <typename T>
+NANO_NODC_INLINE_CXPR bool quad<T>::operator==(const quad& q) const NANO_NOEXCEPT {
+  return (top_left == q.top_left && top_right == q.top_right && bottom_right == q.bottom_right
+      && bottom_left == q.bottom_left);
+}
+
+template <typename T>
+NANO_NODC_INLINE_CXPR bool quad<T>::operator!=(const quad& q) const NANO_NOEXCEPT {
+  return !this->operator==(q);
+}
+
+template <typename T>
+NANO_CXPR transform<T>::transform(value_type _a, value_type _b, value_type _c, value_type _d, value_type _tx,
+    value_type _ty) NANO_NOEXCEPT : a(_a),
+                                    b(_b),
+                                    c(_c),
+                                    d(_d),
+                                    tx(_tx),
+                                    ty(_ty) {}
+
+template <typename T>
+NANO_NODC_INLINE_CXPR transform<T> transform<T>::identity() NANO_NOEXCEPT {
+  return {
+    static_cast<T>(1), //
+    static_cast<T>(0), //
+    static_cast<T>(0), //
+    static_cast<T>(1), //
+    static_cast<T>(0), //
+    static_cast<T>(0) //
+  };
+}
+/// [ a  b  tx ]
+/// [ c  d  ty ]
+/// [ 0  0  1  ]
+template <typename T>
+NANO_NODC_INLINE_CXPR transform<T> transform<T>::translation(const nano::point<value_type>& p) NANO_NOEXCEPT {
+  return {
+    static_cast<T>(1), //
+    static_cast<T>(0), //
+    static_cast<T>(0), //
+    static_cast<T>(1), //
+    p.x, p.y //
+  };
+}
+
+template <typename T>
+NANO_NODC_INLINE_CXPR transform<T> transform<T>::scale(const nano::size<value_type>& s) NANO_NOEXCEPT {
+  return {
+    s.width, //
+    static_cast<T>(0), //
+    static_cast<T>(0), //
+    s.height, //
+    static_cast<T>(0), //
+    static_cast<T>(0) //
+  };
+}
+
+template <typename T>
+NANO_NODC_INLINE transform<T> transform<T>::rotation(value_type angle) NANO_NOEXCEPT {
+  const T ca = std::cos(angle);
+  const T sa = std::sin(angle);
+
+  return {
+    ca, //
+    -sa, //
+    sa, //
+    ca, //
+    static_cast<T>(0), //
+    static_cast<T>(0) //
+  };
+}
+
+template <typename T>
+NANO_NODC_INLINE transform<T> transform<T>::rotation(value_type angle, const nano::point<value_type>& p) NANO_NOEXCEPT {
+  return translation(p) * rotation(angle) * translation(-p);
+}
+
+template <typename T>
+NANO_INLINE_CXPR transform<T>& transform<T>::translated(const nano::point<value_type>& p) NANO_NOEXCEPT {
+  return *this += p;
+}
+
+template <typename T>
+NANO_INLINE_CXPR transform<T>& transform<T>::scaled(const nano::size<value_type>& s) NANO_NOEXCEPT {
+  return *this *= s;
+}
+
+template <typename T>
+NANO_INLINE transform<T>& transform<T>::rotated(value_type angle) NANO_NOEXCEPT {
+  return *this *= rotation(angle);
+}
+
+template <typename T>
+NANO_NODC_INLINE_CXPR transform<T> transform<T>::with_translation(
+    const nano::point<value_type>& p) const NANO_NOEXCEPT {
+  return *this + p;
+}
+
+template <typename T>
+NANO_NODC_INLINE_CXPR transform<T> transform<T>::with_scale(const nano::size<value_type>& s) const NANO_NOEXCEPT {
+  return *this * s;
+}
+
+template <typename T>
+NANO_NODC_INLINE transform<T> transform<T>::with_rotation(value_type angle) const NANO_NOEXCEPT {
+  return *this * rotation(angle);
+}
+
+template <typename T>
+NANO_NODC_INLINE_CXPR transform<T> transform<T>::operator*(const transform& t) const NANO_NOEXCEPT {
+  return {
+    a * t.a + b * t.c, //
+    a * t.b + b * t.d, //
+    c * t.a + d * t.c, //
+    c * t.b + d * t.d, //
+    tx + a * t.tx + b * t.ty, //
+    ty + c * t.tx + d * t.ty //
+  };
+}
+
+template <typename T>
+NANO_NODC_INLINE_CXPR transform<T> transform<T>::operator+(const nano::point<value_type>& p) const NANO_NOEXCEPT {
+  return {
+    a, //
+    b, //
+    c, //
+    d, //
+    tx + a * p.x + b * p.y, //
+    ty + c * p.x + d * p.y //
+  };
+}
+
+template <typename T>
+NANO_NODC_INLINE_CXPR transform<T> transform<T>::operator-(const nano::point<value_type>& p) const NANO_NOEXCEPT {
+  return *this + -p;
+}
+
+template <typename T>
+NANO_NODC_INLINE_CXPR transform<T> transform<T>::operator*(const nano::size<value_type>& s) const NANO_NOEXCEPT {
+  return {
+    a * s.width, //
+    b * s.height, //
+    c * s.width, //
+    d * s.height, //
+    tx, //
+    ty //
+  };
+}
+
+template <typename T>
+NANO_INLINE_CXPR transform<T>& transform<T>::operator*=(const transform& t) NANO_NOEXCEPT {
+  return *this = (*this * t);
+}
+
+template <typename T>
+NANO_INLINE_CXPR transform<T>& transform<T>::operator+=(const nano::point<value_type>& p) NANO_NOEXCEPT {
+  return *this = (*this + p);
+}
+
+template <typename T>
+NANO_INLINE_CXPR transform<T>& transform<T>::operator-=(const nano::point<value_type>& p) NANO_NOEXCEPT {
+  return *this = (*this - p);
+}
+
+template <typename T>
+NANO_INLINE_CXPR transform<T>& transform<T>::operator*=(const nano::size<value_type>& s) NANO_NOEXCEPT {
+  return *this = (*this * s);
+}
+
+template <typename T>
+NANO_NODC_INLINE_CXPR nano::point<T> transform<T>::apply(const nano::point<value_type>& p) const NANO_NOEXCEPT {
+  return { a * p.x + c * p.y + tx, b * p.x + d * p.y + ty };
+}
+
+template <typename T>
+NANO_NODC_INLINE_CXPR nano::quad<T> transform<T>::apply(const nano::rect<value_type>& r) const NANO_NOEXCEPT {
+  return nano::quad<T>(apply(r.position), apply(r.top_right()), apply(r.bottom_right()), apply(r.bottom_left()));
+}
+
+template <typename T>
+NANO_NODC_INLINE_CXPR nano::quad<T> transform<T>::apply(const nano::quad<value_type>& q) const NANO_NOEXCEPT {
+  return nano::quad<T>(apply(q.top_left), apply(q.top_right), apply(q.bottom_right), apply(q.bottom_left));
+}
+
+template <typename T>
+template <typename transform_type>
+NANO_NODC_INLINE transform<T>::operator transform_type() const {
+  return transform_type{ a, b, c, d, tx, ty };
+}
+
+template <typename T>
+NANO_NODC_INLINE_CXPR nano::point<T> operator*(const nano::point<T>& p, const transform<T>& t) NANO_NOEXCEPT {
+  return t.apply(p);
+}
+
+template <typename T>
+NANO_NODC_INLINE_CXPR nano::quad<T> operator*(const nano::rect<T>& r, const transform<T>& t) NANO_NOEXCEPT {
+  return t.apply(r);
+}
+
+template <typename T>
+NANO_NODC_INLINE_CXPR nano::quad<T> operator*(const nano::quad<T>& q, const transform<T>& t) NANO_NOEXCEPT {
+  return t.apply(q);
 }
 } // namespace nano.
 
