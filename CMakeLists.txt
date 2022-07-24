@@ -14,4 +14,4 @@ option(NANO_GEO_BUILD_TESTS "Build tests." OFF)
 option(NANO_GEO_DEV "Development build" OFF)
 
 # nano-geometry interface.
-nano_create_module(geometry SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/nano/geometry.h" DEV)
+nano_create_module(geometry SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/nano/geometry.h")
