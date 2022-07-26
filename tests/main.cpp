@@ -1,6 +1,5 @@
-#include <iostream>
-#include "nano/geometry.h"
-#include "nano/test.h"
+#include <nano/test.h>
+#include <nano/geometry.h>
 
 namespace {
 // clang-format off

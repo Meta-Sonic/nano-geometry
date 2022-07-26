@@ -1,5 +1,5 @@
 /*
- * Nano Library
+ * nano library
  *
  * Copyright (C) 2022, Meta-Sonic
  * All rights reserved.
@@ -14,71 +14,14 @@
 #pragma once
 
 /*!
- * @file      geometry.h
+ * @file      nano/geometry.h
  * @brief     nano geometry
  * @copyright Copyright (C) 2022, Meta-Sonic
  * @author    Alexandre Arsenault alx.arsenault@gmail.com
  * @date      Created 16/06/2022
  */
 
-#include <algorithm>
-#include <cmath>
-#include <limits>
-#include <ostream>
-#include <type_traits>
-#include <utility>
-
-//
-// MARK: - Macros -
-//
-
-#define NANO_INLINE inline
-
-#define NANO_CXPR constexpr
-
-#define NANO_NOEXCEPT noexcept
-
-#define NANO_NODISCARD [[nodiscard]]
-
-/// @def NANO_INLINE_CXPR
-#define NANO_INLINE_CXPR NANO_INLINE NANO_CXPR
-
-/// @def NANO_NODC_INLINE
-#define NANO_NODC_INLINE NANO_NODISCARD inline
-
-/// @def NANO_NODC_INLINE_CXPR
-#define NANO_NODC_INLINE_CXPR NANO_NODISCARD NANO_INLINE_CXPR
-
-#define NANO_STRINGIFY(X) NANO_STR(X)
-#define NANO_STR(X) #X
-
-#ifdef _MSC_VER
-  #define NANO_MSVC_PRAGMA(X) __pragma(X)
-#else
-  #define NANO_MSVC_PRAGMA(X)
-#endif
-
-#ifdef __clang__
-  #define NANO_CLANG_PRAGMA(X) _Pragma(X)
-#else
-  #define NANO_CLANG_PRAGMA(X)
-#endif
-
-#define NANO_MSVC_DIAGNOSTIC_PUSH() NANO_MSVC_PRAGMA(warning(push))
-#define NANO_MSVC_DIAGNOSTIC_POP() NANO_MSVC_PRAGMA(warning(pop))
-#define NANO_MSVC_DIAGNOSTIC(X) NANO_MSVC_PRAGMA(warning(disable : X))
-
-#define NANO_MSVC_PUSH_WARNING(X) NANO_MSVC_DIAGNOSTIC_PUSH() NANO_MSVC_PRAGMA(warning(disable : X))
-#define NANO_MSVC_POP_WARNING() NANO_MSVC_DIAGNOSTIC_POP()
-
-#define NANO_CLANG_DIAGNOSTIC_PUSH() NANO_CLANG_PRAGMA("clang diagnostic push")
-#define NANO_CLANG_DIAGNOSTIC_POP() NANO_CLANG_PRAGMA("clang diagnostic pop")
-#define NANO_CLANG_DIAGNOSTIC(TYPE, X) NANO_CLANG_PRAGMA(NANO_STRINGIFY(clang diagnostic TYPE X))
-
-#define NANO_CLANG_PUSH_WARNING(X)                                                                                     \
-  NANO_CLANG_DIAGNOSTIC_PUSH() NANO_CLANG_PRAGMA(NANO_STRINGIFY(clang diagnostic ignored X))
-
-#define NANO_CLANG_POP_WARNING() NANO_CLANG_DIAGNOSTIC_POP()
+#include <nano/common.h>
 
 NANO_CLANG_DIAGNOSTIC_PUSH()
 NANO_CLANG_DIAGNOSTIC(warning, "-Weverything")
@@ -98,38 +41,7 @@ struct point;
 template <typename T>
 struct rect;
 
-//
-// MARK: - Traits -
-//
-
-///
-struct nonesuch {
-  nonesuch(const nonesuch&) = delete;
-  ~nonesuch() = delete;
-  void operator=(const nonesuch&) = delete;
-};
-
-template <class Default, class AlwaysVoid, template <class...> class Op, class... Args>
-struct detector_value : std::false_type {};
-
-///
-template <class Default, template <class...> class Op, class... Args>
-struct detector_value<Default, std::void_t<Op<Args...>>, Op, Args...> : std::true_type {};
-
-template <class T, template <class...> class... Ops>
-using has_members = std::conjunction<detector_value<nonesuch, void, Ops, T>...>;
-
-template <class T, template <class...> class... Ops>
-using enable_if_has_members_t = std::enable_if_t<has_members<T, Ops...>::value, std::nullptr_t>;
-
-template <class T, template <class...> class... Ops>
-using if_members = enable_if_has_members_t<T, Ops...>;
-
 namespace meta {
-#define NANO_USING_TYPE(x)                                                                                             \
-  template <class T>                                                                                                   \
-  using x = decltype(T::x)
-
   NANO_USING_TYPE(x);
   NANO_USING_TYPE(y);
   NANO_USING_TYPE(width);
@@ -146,25 +58,7 @@ namespace meta {
   NANO_USING_TYPE(bottom);
   NANO_USING_TYPE(start);
   NANO_USING_TYPE(end);
-
-#undef NANO_USING_TYPE
 } // namespace meta.
-
-template <typename T1, typename T2, std::enable_if_t<std::is_floating_point_v<std::common_type_t<T1, T2>>, int> = 0>
-NANO_NODC_INLINE_CXPR bool fcompare(T1 a, T2 b) NANO_NOEXCEPT {
-  using ftype = std::common_type_t<T1, T2>;
-  const ftype fa = static_cast<ftype>(a);
-  const ftype fb = static_cast<ftype>(b);
-  const ftype t = static_cast<ftype>(std::numeric_limits<ftype>::epsilon());
-  const ftype dt = std::abs(fa - fb);
-  return dt <= t || dt < std::max(std::abs(fa), std::abs(fb)) * t;
-
-  //  using T = std::common_type_t<T1, T2>;
-  //  return std::abs(static_cast<T>(a) - static_cast<T>(b)) <= std::numeric_limits<T>::epsilon();
-}
-
-// typedef typename detail::float_common_return<T1, T2>::type ftype;
-//
 
 //
 // MARK: - Geometry -
